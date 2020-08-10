@@ -33,7 +33,7 @@ torch2vec requires:
 * Now get similar document ids <br/> <code>model.similar_docs('doc_id',topk=10,use='torch')</code><br/> <code>topk</code>: (default=10) Get 'topk' numbers of similar docs <br/> <code>use</code>: 'torch' or 'sklearn' (deafault='torch') <br/> returns: similar ids and cosine similarity score of topk elements.(only similar ids if use='sklearn')  
 * If model is saved (stored as .npy file) then model can be reused without training using <br/> <code>from torch2vec.torch2vec import LoadModel</code> <br/> <code> model = LoadModel(path='weights.npy')</code> <br/> Reusing: <code>model.similar_docs('doc_id',topk=10,use='torch')</code>
 
-### Refrences
+### References
 * [Distributed Representations of Sentences and Documents Quoc V. Le, Tomas Mikolov](https://arxiv.org/pdf/1405.4053.pdf)
 * [https://github.com/inejc/paragraph-vectors](https://github.com/inejc/paragraph-vectors)
 * [Notes on Noise Contrastive Estimation and Negative Sampling, C. Dyer](https://arxiv.org/abs/1410.8251)
