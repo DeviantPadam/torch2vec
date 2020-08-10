@@ -35,8 +35,8 @@ torch2vec requires:
 
 ### Refrences
 * [Distributed Representations of Sentences and Documents Quoc V. Le, Tomas Mikolov](https://arxiv.org/pdf/1405.4053.pdf)
-* (https://github.com/inejc/paragraph-vectors)[https://github.com/inejc/paragraph-vectors]
-* (Notes on Noise Contrastive Estimation and Negative Sampling, C. Dyer)[https://arxiv.org/abs/1410.8251]
-* (Document Embedding with Paragraph Vectors Andrew M. Dai, Christopher Olah, Quoc V. Le)[https://arxiv.org/abs/1507.07998]
+* [https://github.com/inejc/paragraph-vectors](https://github.com/inejc/paragraph-vectors)
+* [Notes on Noise Contrastive Estimation and Negative Sampling, C. Dyer](https://arxiv.org/abs/1410.8251)
+* [Document Embedding with Paragraph Vectors Andrew M. Dai, Christopher Olah, Quoc V. Le](https://arxiv.org/abs/1507.07998)
 
 #### Special thanks to [Luc](https://github.com/x0rzkov) for helping and motivating me.
