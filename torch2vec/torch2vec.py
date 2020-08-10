@@ -107,14 +107,15 @@ class DM(nn.Module):
 #             print('epoch - {} loss - {:.4f}'.format(epoch+1,loss))
         print('Final loss: {:.4f}'.format(loss))
         
-    def save_model(self,ids,file_name):
+    def save_model(self,ids,file_name=None):
         docvecs = self._D.data.cpu().numpy()
         if len(docvecs)!=len(ids):
             raise Exception("Length of ids does'nt match")
             
             
         self.embeddings = np.concatenate([ids.reshape(-1,1),docvecs],axis=1)
-        np.save(file_name,self.embeddings,fix_imports=False)
+        if file_name:
+            np.save(file_name,self.embeddings,fix_imports=False)
         
     def load_model(self,file_path):
         self.embeddings = np.load(file_path,allow_pickle=True,
@@ -158,7 +159,7 @@ class DM(nn.Module):
                     inner.append(cos(i.view(-1,1),j.view(-1,1)).tolist())
                 similarity.append(inner)
             similarity = torch.FloatTensor(similarity).view(1,-1).to(device)
-            return torch.topk(similarity,topk), None
+            return torch.topk(similarity,topk)
         if use=='sklearn':
             sim = cosine_similarity(X=doc.cpu().numpy(),
                                     Y=embeddings.cpu().numpy())
