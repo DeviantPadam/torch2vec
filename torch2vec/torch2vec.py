@@ -202,7 +202,9 @@ class LoadModel():
         
         if use=='torch':
             similarity = []
-            cos=nn.CosineSimilarity(dim=0).to(device)
+            cos=nn.CosineSimilarity(dim=0)
+            if torch.cuda.isavailable():
+                cos.cuda()
             for i in doc:
                 inner = []
                 pbar = tqdm.tqdm(embeddings,desc='----Getting Similar Docs----')
