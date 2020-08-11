@@ -15,8 +15,11 @@ from collections import Counter
 
 
 class DataPreparation():
-    def __init__(self,corpus_path,vocab_size=None):
-        data = pd.read_csv(corpus_path)
+    def __init__(self,corpus_file_path,vocab_size=None):
+        if '.txt' in corpus_file_path: 
+            data = pd.read_csv(corpus_file_path,delimiter='\t')
+        if '.csv' in corpus_file_path:
+            data = pd.read_csv(corpus_file_path)
         self.corpus = data.iloc[:,1]
         self.document_ids = data.iloc[:,0].values
 #         self.window_size = window_size
