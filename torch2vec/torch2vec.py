@@ -203,7 +203,7 @@ class LoadModel():
         if use=='torch':
             similarity = []
             cos=nn.CosineSimilarity(dim=0)
-            if torch.cuda.isavailable():
+            if torch.cuda.is_available():
                 cos.cuda()
             for i in doc:
                 inner = []
