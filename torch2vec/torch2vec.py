@@ -124,6 +124,8 @@ class DM(nn.Module):
     
     def similar_docs(self,docs,topk=10,use='torch'):
         topk=topk+1
+        if use not in ['torch','sklearn'] :
+            raise Exception("Only 'sklearn' or 'torch' method can be used.")
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         if not isinstance(docs,np.ndarray):
             docs = np.array(docs)
@@ -134,37 +136,32 @@ class DM(nn.Module):
         if not mask.any():
             raise Exception('Not in vocab')
             
-        given_docvecs = torch.FloatTensor(vecs[mask].tolist()).to(device)
-        vecs = torch.FloatTensor(vecs.tolist()).to(device)
+        given_docvecs = torch.from_numpy(vecs[mask]).to(device)
+        vecs = torch.from_numpy(vecs).to(device)
         similars= self._similarity(given_docvecs,vecs,topk,use=use)
         if use=='torch':
-            similar_docs = docids[similars.indices.tolist()[0]].tolist()
+            similar_docs = (docids[similars.indices.tolist()[0]]).tolist()
             probs = similars.values.tolist()[0]
             return similar_docs[1:], probs[1:]
         if use=='sklearn':
-            similar_docs = docids[similars].tolist()
+            similar_docs = docids[similars[1]].tolist()
 #             probs = similars
-            return similar_docs[1:]
+            return similar_docs[1:], similars[0][1:]
         
     def _similarity(self,doc,embeddings,topk,use):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
         if use=='torch':
-            similarity = []
-            cos=nn.CosineSimilarity(dim=0).to(device)
-            for i in doc:
-                inner = []
-                pbar = tqdm.tqdm(embeddings,desc='----Getting Similar Docs----')
-                for j in pbar:
-                    inner.append(cos(i.view(-1,1),j.view(-1,1)).tolist())
-                similarity.append(inner)
-            similarity = torch.FloatTensor(similarity).view(1,-1).to(device)
+            doc = doc/doc.norm(dim=1,keepdim=True)
+            embeddings = embeddings/embeddings.norm(dim=1,keepdim=True)
+            similarity = (torch.mm(doc,embeddings.transpose(0,1))).to(device)
             return torch.topk(similarity,topk)
         if use=='sklearn':
             sim = cosine_similarity(X=doc.cpu().numpy(),
                                     Y=embeddings.cpu().numpy())
-            index = np.flip(np.argsort(sim)[0][:topk])
-            return index
+            index = np.argsort(-sim)[0][:topk]
+            sim = -np.sort(-sim[0])
+            return sim[:topk].tolist(),index.tolist()
     
     
 class LoadModel():
@@ -185,36 +182,29 @@ class LoadModel():
         if not mask.any():
             raise Exception('Not in vocab')
             
-        given_docvecs = torch.FloatTensor(vecs[mask].tolist()).to(device)
-        vecs = torch.FloatTensor(vecs.tolist()).to(device)
+        given_docvecs = torch.from_numpy(vecs[mask]).to(device)
+        vecs = torch.from_numpy(vecs).to(device)
         similars= self._similarity(given_docvecs,vecs,topk,use=use)
         if use=='torch':
-            similar_docs = docids[similars.indices.tolist()[0]].tolist()
+            similar_docs = (docids[similars.indices.tolist()[0]]).tolist()
             probs = similars.values.tolist()[0]
             return similar_docs[1:], probs[1:]
         if use=='sklearn':
-            similar_docs = docids[similars].tolist()
+            similar_docs = docids[similars[1]].tolist()
 #             probs = similars
-            return similar_docs[1:]
+            return similar_docs[1:], similars[0][1:]
         
     def _similarity(self,doc,embeddings,topk,use):
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
         if use=='torch':
-            similarity = []
-            cos=nn.CosineSimilarity(dim=0)
-            if torch.cuda.is_available():
-                cos.cuda()
-            for i in doc:
-                inner = []
-                pbar = tqdm.tqdm(embeddings,desc='----Getting Similar Docs----')
-                for j in pbar:
-                    inner.append(cos(i.view(-1,1),j.view(-1,1)).tolist())
-                similarity.append(inner)
-            similarity = torch.FloatTensor(similarity).view(1,-1).to(device)
+            doc = doc/doc.norm(dim=1,keepdim=True)
+            embeddings = embeddings/embeddings.norm(dim=1,keepdim=True)
+            similarity = (torch.mm(doc,embeddings.transpose(0,1))).to(device)
             return torch.topk(similarity,topk)
         if use=='sklearn':
             sim = cosine_similarity(X=doc.cpu().numpy(),
                                     Y=embeddings.cpu().numpy())
-            index = np.flip(np.argsort(sim)[0][:topk])
-            return index
+            index = np.argsort(-sim)[0][:topk]
+            sim = -np.sort(-sim[0])
+            return sim[:topk].tolist(),index.tolist()
