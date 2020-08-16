@@ -137,7 +137,7 @@ class DM(nn.Module):
             raise Exception('Not in vocab')
             
         given_docvecs = torch.tensor(vecs[mask].tolist()).to(device)
-        vecs = torch.from_numpy(vecs).to(device)
+        vecs = torch.tensor(vecs.tolist()).to(device)
         similars= self._similarity(given_docvecs,vecs,topk,use=use)
         if use=='torch':
             similar_docs = (docids[similars.indices.tolist()[0]]).tolist()
@@ -183,7 +183,7 @@ class LoadModel():
             raise Exception('Not in vocab')
             
         given_docvecs = torch.tensor(vecs[mask].tolist()).to(device) 
-        vecs = torch.from_numpy(vecs).to(device)
+        vecs = torch.Tensor(vecs.tolist()).to(device)
         similars= self._similarity(given_docvecs,vecs,topk,use=use)
         if use=='torch':
             similar_docs = (docids[similars.indices.tolist()[0]]).tolist()
