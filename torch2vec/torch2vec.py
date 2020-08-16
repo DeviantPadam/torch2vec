@@ -182,7 +182,7 @@ class LoadModel():
         if not mask.any():
             raise Exception('Not in vocab')
             
-        given_docvecs = torch.from_numpy(vecs[mask]).to(device)
+        given_docvecs = torch.tensor(vecs[mask].tolist()).to(device) 
         vecs = torch.from_numpy(vecs).to(device)
         similars= self._similarity(given_docvecs,vecs,topk,use=use)
         if use=='torch':

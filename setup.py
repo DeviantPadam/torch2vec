@@ -11,7 +11,7 @@ from setuptools import setup, find_packages
 
 setup_args = dict(
     name='torch2vec',
-    version='0.1.3',
+    version='0.1.1',
     description='A PyTorch implementation of Doc2Vec (distributed memory) with similarity measure.',
     license='GPL3',
     packages=find_packages(),
