@@ -82,10 +82,10 @@ class DM(nn.Module):
         dataset = Dataset(doc_ids, context, target_noise_ids)
         dataloader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,
                                                  num_workers=num_workers)
-        loss = []
+        loss = np.nan
         for epoch in range(epochs):
             pbar = tqdm.tqdm(dataloader,
-                        desc='Epoch= {} ---- prev loss={}'.format(epoch+1,loss))
+                        desc='Epoch= {} ---- prev loss={:.4f}'.format(epoch+1,loss))
             loss=[]
             
             for doc_ids,context_ids,target_noise_ids in pbar:
