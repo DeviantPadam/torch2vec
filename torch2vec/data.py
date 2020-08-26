@@ -10,22 +10,14 @@ import tqdm
 import numpy as np
 import pandas as pd
 import torch
+import os
+import concurrent.futures
+import nltk
+from nltk.stem import WordNetLemmatizer
 from numpy.random import choice
 from collections import Counter
 
-
-class DataPreparation():
-    def __init__(self,corpus_file_path,vocab_size=None):
-        if '.txt' in corpus_file_path: 
-            data = pd.read_csv(corpus_file_path,delimiter='\t')
-        if '.csv' in corpus_file_path:
-            data = pd.read_csv(corpus_file_path)
-        self.corpus = data.iloc[:,1]
-        self.document_ids = data.iloc[:,0].values
-#         self.window_size = window_size
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        self.vocab_size = vocab_size if vocab_size else None
-        self.stopwords = ['one', 'very', 'behind', 'move', 'yours', 'through', 
+stopwords = ['one', 'very', 'behind', 'move', 'yours', 'through', 
                           '‘ve', 'much',
        'your', 'just', '’s', 'call', 'therein', "n't", 'nor', 'almost',
        'keep', 'my', 'since', 'each', 'rather', 'two', 'did', 'put',
@@ -75,9 +67,111 @@ class DataPreparation():
        '.', '/', ':', ';', '<', '=', '>', '?', '@', '[', '\\', ']', '^',
        '_', '`', '{', '|', '}', '~', '-pron-', '-PRON-']
         
-    def vocab_builder(self):
-        tqdm.tqdm.pandas(desc='--- Tokenizing ---')
-        self.corpus = self.corpus.progress_apply(self._tokenize_str)
+def _tokenize_str(str_):
+    
+    # keep only alphanumeric and punctations
+    str_ = re.sub(r'[^A-Za-z0-9(),.!?\'`]', ' ', str_)
+    # remove multiple whitespace characters
+    str_ = re.sub(r'\s{2,}', ' ', str_)
+    # punctations to tokens
+    str_ = re.sub(r'\(', ' ( ', str_)
+    str_ = re.sub(r'\)', ' ) ', str_)
+    str_ = re.sub(r',', ' , ', str_)
+    str_ = re.sub(r'\.', ' . ', str_)
+    str_ = re.sub(r'!', ' ! ', str_)
+    str_ = re.sub(r'\?', ' ? ', str_)
+    # split contractions into multiple tokens
+    str_ = re.sub(r'\'s', ' \'s', str_)
+    str_ = re.sub(r'\'ve', ' \'ve', str_)
+    str_ = re.sub(r'n\'t', ' n\'t', str_)
+    str_ = re.sub(r'\'re', ' \'re', str_)
+    str_ = re.sub(r'\'d', ' \'d', str_)
+    str_ = re.sub(r'\'ll', ' \'ll', str_)
+    # lower case
+
+    return [lemmatizer.lemmatize(word) for word in str_.strip().lower().split() 
+            if word not in stopwords and len(word)>2]
+
+lemmatizer = WordNetLemmatizer()
+
+
+class DataPreparation():
+    def __init__(self,corpus_file_path,f_size,vocab_size=None):
+        if '.txt' in corpus_file_path: 
+            data = pd.read_csv(corpus_file_path,delimiter='\t')
+        elif '.csv' in corpus_file_path:
+            data = pd.read_csv(corpus_file_path)
+        elif isinstance(corpus_file_path,(pd.core.frame.DataFrame,np.ndarray)):
+            data = corpus_file_path
+        self.args = data.iloc[:,1:f_size+1]
+        self.corpus = data.iloc[:,f_size+1]
+        self.document_ids = data.iloc[:,0].values
+#         self.window_size = window_size
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.vocab_size = vocab_size if vocab_size else None
+        nltk.download('wordnet')
+        
+    def tokenize(self,workers=-1):
+        if workers==-1:
+            workers = os.cpu_count()
+        
+        with concurrent.futures.ProcessPoolExecutor(workers) as executor:
+            result = list(tqdm.tqdm(executor.map(_tokenize_str,self.corpus),
+                                    total=len(self.corpus),
+                        desc='--Tokenizing(using {} cores)--'.format(workers)))
+            executor.shutdown(wait=True)
+        self.corpus = pd.DataFrame({'text':np.array(result)})['text']
+        
+            
+      
+    def _get_bigrams(self,min_count):
+        text = np.copy(self.corpus)
+        vocab = [word for sen in text for word in sen]
+        ngram = [(i,j) for i,j in zip(vocab[:-1],vocab[1:])]
+        freq = Counter(ngram)
+        filterbi = [bigram for bigram in freq.most_common() if bigram[1]>min_count]
+        bigrams = [" ".join(bigram[0]) for bigram in filterbi]
+        return bigrams
+    
+    def _add_bigrams(self,text):
+        for idx in tqdm.tqdm(range(len(text)),desc='Phrasing---'):
+            length=len(text[idx])-1
+            word_count=0
+            while word_count<length:
+    
+                if text[idx][word_count]+' '+text[idx][word_count+1] in self.bigrams:
+                    text[idx][word_count] = text[idx][word_count]+' '+text[idx][word_count+1]
+                    text[idx].remove(text[idx][word_count+1])
+                    length = len(text[idx])-1
+        #             print(cor[i][j]+' '+cor[i][j+1])
+    
+                word_count+=1
+        return text
+    
+#     def phraser(self,min_count,workers=-1):
+#         if workers==-1:
+#             workers = os.cpu_count()
+# #         self.bigrams = self._get_bigrams(300)
+# #         global bigrams
+        
+# #         bigrams = _get_bigrams(self.corpus,min_count)
+#         chunks = np.array_split(self.corpus,workers)
+#         with concurrent.futures.ProcessPoolExecutor() as execu:
+#             result= np.concatenate(list(tqdm.tqdm(execu.imap(_add_bigrams,chunks),total=workers,
+#                                              desc='--Phrasing-- using {} cores'.format(workers))),
+#                                     axis=0)
+        
+#         self.corpus = pd.DataFrame({'text':np.array(result)})['text']
+#         del bigrams
+        
+    def phraser(self,min_count):
+        self.bigrams = self._get_bigrams(min_count)
+        result = self._add_bigrams(self.corpus.values)
+        self.corpus = pd.DataFrame({'text':np.array(result)})['text']
+        del self.bigrams
+        
+    def vocab_builder(self,workers=-1):
+        
         vocab = [word for sentence in self.corpus.values for word in sentence]
         word_counts = Counter(vocab)
         if not self.vocab_size:
@@ -90,30 +184,8 @@ class DataPreparation():
                                        self.word_id_mapper.keys()))
             
     
-    def _tokenize_str(self,str_):
-        
-        # keep only alphanumeric and punctations
-        str_ = re.sub(r'[^A-Za-z0-9(),.!?\'`]', ' ', str_)
-        # remove multiple whitespace characters
-        str_ = re.sub(r'\s{2,}', ' ', str_)
-        # punctations to tokens
-        str_ = re.sub(r'\(', ' ( ', str_)
-        str_ = re.sub(r'\)', ' ) ', str_)
-        str_ = re.sub(r',', ' , ', str_)
-        str_ = re.sub(r'\.', ' . ', str_)
-        str_ = re.sub(r'!', ' ! ', str_)
-        str_ = re.sub(r'\?', ' ? ', str_)
-        # split contractions into multiple tokens
-        str_ = re.sub(r'\'s', ' \'s', str_)
-        str_ = re.sub(r'\'ve', ' \'ve', str_)
-        str_ = re.sub(r'n\'t', ' n\'t', str_)
-        str_ = re.sub(r'\'re', ' \'re', str_)
-        str_ = re.sub(r'\'d', ' \'d', str_)
-        str_ = re.sub(r'\'ll', ' \'ll', str_)
-        # lower case
 
-        return [word for word in str_.strip().lower().split() 
-                if word not in self.stopwords and len(word)>2]
+
     
     def get_data(self,window_size,num_noise_words):
         '''

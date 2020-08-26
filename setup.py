@@ -25,7 +25,9 @@ install_requires = [
     'tqdm',
     'pandas',
     'torch',
-    'scikit-learn'
+    'scikit-learn',
+    'nltk',
+    'pytorch-lightning'
 ]
 
 if __name__ == '__main__':

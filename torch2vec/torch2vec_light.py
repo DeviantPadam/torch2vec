@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon Aug 10 19:48:06 2020
+Created on Wed Aug 26 18:34:49 2020
 
 @author: deviantpadam
 """
 
-from torch2vec.data import Dataset
+
+import pytorch_lightning as pl
 import numpy as np
 import torch
 import torch.nn as nn
-import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 
-class NegativeSampling(nn.Module):
+
+class NegativeSampling(pl.LightningModule):
     
     
     def __init__(self):
@@ -31,7 +32,7 @@ class NegativeSampling(nn.Module):
     
 
 
-class DM(nn.Module):
+class DM(pl.LightningModule):
     """Distributed Memory version of Paragraph Vectors.
     Parameters
     ----------
@@ -54,7 +55,9 @@ class DM(nn.Module):
         self._O = nn.Parameter(
             torch.FloatTensor(vec_dim, num_words).zero_(), requires_grad=True)
         
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.cost_func = NegativeSampling()
+        
+#         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     def forward(self, context_ids, doc_ids, target_noise_ids):
         
@@ -69,46 +72,19 @@ class DM(nn.Module):
         return torch.bmm(
             x.unsqueeze(1),
             self._O[:, target_noise_ids].permute(1, 0, 2)).squeeze()
-
-    def get_paragraph_vector(self):
-        return self._D.data.tolist()
     
-    def fit(self,doc_ids,context,target_noise_ids,epochs,batch_size,
-            num_workers=1):
-        
-        opt=torch.optim.Adam(self.parameters(),lr=0.0001)
-        cost_func = NegativeSampling()
-        if torch.cuda.is_available():            
-            cost_func.cuda()
-#         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        dataset = Dataset(doc_ids, context, target_noise_ids)
-        dataloader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,
-                                                 num_workers=num_workers)
-        
-        for epoch in range(epochs):
-            pbar = tqdm.tqdm(dataloader,
-                        desc='Epoch= {}'.format(epoch+1))
-            loss=[]
-            
-            for doc_ids,context_ids,target_noise_ids in pbar:
-                doc_ids = doc_ids.to(self.device)
-                context_ids = context_ids.to(self.device)
-                target_noise_ids = target_noise_ids.to(self.device)
-                x = self.forward(
-                        context_ids,
-                        doc_ids,
-                        target_noise_ids) 
-                x = cost_func.forward(x)
-                loss.append(x.item())
-                pbar.set_postfix(loss='{:.4f}'.format(x.item()))
-                self.zero_grad()
-                x.backward()
-                opt.step()
-#                 if step%100==0:
-#                     print('-',end='')
-            loss = torch.mean(torch.FloatTensor(loss))
-#             print('epoch - {} loss - {:.4f}'.format(epoch+1,loss))
-#         print('Final loss: {:.4f}'.format(loss))
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(),lr=0.0001)
+        return optimizer
+    
+    def training_step(self,batch,batch_idx):
+        doc_ids,context_ids,target_noise_ids = batch
+        vectors = self(context_ids,
+                    doc_ids,
+                    target_noise_ids)
+        loss = self.cost_func.forward(vectors)
+        result = pl.TrainResult(loss)
+        return result
         
     def save_model(self,ids,args,file_name=None):
         docvecs = self._D.data.detach().cpu().numpy()
@@ -119,7 +95,7 @@ class DM(nn.Module):
         unk = np.unique(args.values)
         mapper = {word:idx for idx,word in enumerate(unk)}
         embed = nn.Embedding(len(docvecs)*args.shape[1],5).to(self.device)
-        text = embed(torch.tensor([mapper[word] for idx in range(args.shape[1]) 
+        text = embed(torch.tensor([mapper[word] for idx in range(args.shape[1])
                                    for word in args.iloc[:,idx]],
                                   device=self.device)).to(self.device)
         text = text.detach().cpu().numpy()

@@ -7,6 +7,6 @@ Created on Mon Aug 10 20:07:15 2020
 """
 
 
-from . import data, torch2vec
+from . import data, torch2vec, torch2vec_light
 
-__all__ = ['data','torch2vec']
+__all__ = ['data','torch2vec', 'torch2vec_light']
