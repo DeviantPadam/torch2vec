@@ -83,7 +83,8 @@ class DM(nn.Module):
 #         device = 'cuda' if torch.cuda.is_available() else 'cpu'
         dataset = Dataset(doc_ids, context, target_noise_ids)
         dataloader = torch.utils.data.DataLoader(dataset,batch_size=batch_size,
-                                                 num_workers=num_workers)
+                                                 num_workers=num_workers,
+                                                 pin_memory=True)
         
         for epoch in range(epochs):
             pbar = tqdm.tqdm(dataloader,
