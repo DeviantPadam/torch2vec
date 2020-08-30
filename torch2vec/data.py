@@ -109,7 +109,36 @@ class DataPreparation():
 #         self.window_size = window_size
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.vocab_size = vocab_size if vocab_size else None
+        self.pad_length = []
+        self.args=np.concatenate([self.maker(self.args.iloc[:,i]) for i in range(0,f_size)]
+                                 ,axis=1)
+        
         nltk.download('wordnet')
+        
+    def maker(self,features):
+    
+#     auth = auth.apply(padder)
+        
+        self.pad_length.append(round(sum([len(i) for i in features.values])/len(features.values)))
+        pad_length=round(sum([len(i) for i in features.values])/len(features.values))
+        features = features.apply(lambda x: self.padder(x,pad_length))
+
+        vocab = set([i for sen in features.values for i in sen])
+        wordid = {j:i for i,j in enumerate(vocab)}
+        emb = torch.nn.Embedding(len(vocab),1)
+        emb = emb(torch.tensor([wordid[w] for w in vocab]))
+        word_emb_id = {i:j.item() for i,j in zip(wordid,emb)}
+        def embedder(_list):
+            return [word_emb_id[i] for i in _list]
+        embeddings = features.apply(embedder)
+        embeddings = np.vstack(embeddings)
+        return embeddings
+    
+    def padder(self,_list,pad_length):
+        if len(_list)<=pad_length:
+            return _list+['none']*(pad_length-len(_list))
+        elif len(_list)>pad_length:
+            return _list[:pad_length]
         
     def tokenize(self,workers=-1):
         if workers==-1:
@@ -276,4 +305,4 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.doc_ids)
     
     def __getitem__(self,index):
-        return self.doc_ids[index], self.context[index], self.target_noise_ids[index]
+        return self.doc_ids[index],self.context[index],self.target_noise_ids[index]

@@ -6,12 +6,14 @@ Created on Mon Aug 10 19:48:06 2020
 @author: deviantpadam
 """
 
-from torch2vec.data import Dataset
+# from torch2vec.data import Dataset
 import numpy as np
 import torch
 import torch.nn as nn
 import tqdm
+import concurrent.futures
 from sklearn.metrics.pairwise import cosine_similarity
+
 
 class NegativeSampling(nn.Module):
     
@@ -117,17 +119,8 @@ class DM(nn.Module):
             raise Exception("Length of ids does'nt match")
             
 #         to_be_added = np.concatenate([arr.reshape(-1,1) for arr in args],axis=1)
-        unk = np.unique(args.values)
-        mapper = {word:idx for idx,word in enumerate(unk)}
-        embed = nn.Embedding(len(docvecs)*args.shape[1],5).to(self.device)
-        text = embed(torch.tensor([mapper[word] for idx in range(args.shape[1]) 
-                                   for word in args.iloc[:,idx]],
-                                  device=self.device)).to(self.device)
-        text = text.detach().cpu().numpy()
-        text = np.split(text,args.shape[1])
-        to_be_added = np.concatenate(text,axis=1)
-#         print([i.shape for i in text])
-        self.embeddings = np.concatenate([ids.reshape(-1,1),to_be_added,docvecs]
+        
+        self.embeddings = np.concatenate([ids.reshape(-1,1),args,docvecs]
                                          ,axis=1)
         if file_name:
             np.save(file_name,self.embeddings,fix_imports=False)
@@ -177,80 +170,90 @@ class DM(nn.Module):
             index = np.argsort(-sim)[0][:topk]
             sim = -np.sort(-sim[0])
             return sim[:topk].tolist(),index.tolist()
-    
+ 
+# device = 'cude' if torch.cuda.is_available() else 'cpu'
+def _similarity(kwargs):
+    inp, total = kwargs
+    inp = inp/inp.norm(dim=1, keepdim=True)
+    total = total/total.norm(dim=1, keepdim=True)
+    sim = torch.mm(inp,total.transpose(0,1))
+    return sim
     
 class LoadModel():
-    def __init__(self,path,f_size=None):
-        self.embeddings = np.load(path,allow_pickle=True,fix_imports=False)
+    def __init__(self,path,f_size=None,pad = None):
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        embeddings = np.load(path,allow_pickle=True,fix_imports=False)
+        self.docids = embeddings[:,0].astype(np.int)
         if f_size:
             self.f_size=f_size
+            self.pad = pad
+            self.args = torch.from_numpy(embeddings[:,1:8]).to(self.device)
+            self.args_split = torch.split(self.args.detach().cpu(),self.pad,
+                                          dim=1)
+            self.args_split2 = torch.split(self.args,self.pad,dim=1)
         else:
-            f_size=0
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+            self.f_size=0
         
-    def similar_docs(self,docs,topk=10,use='torch'):
+        self.vectors = torch.from_numpy(embeddings[:,8:]).to(self.device)
+        
+
+    def similar_docs(self,docs,topk=10):
         topk=topk+1
-        if use not in ['torch','sklearn'] :
-            raise Exception("Only 'sklearn' or 'torch' method can be used.")
-#         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        if not isinstance(docs,np.ndarray):
-            docs = np.array(docs)
-        
-        docids = self.embeddings[:,0]
-        vecs = self.embeddings[:,self.f_size*5+1:]
-        mask = np.isin(docids,docs)
-        if not mask.any():
-            raise Exception('Not in vocab')
-          
-        given_docvecs = torch.tensor(vecs[mask].tolist(),device=self.device) 
-        vecs = torch.tensor(vecs.tolist(),device=self.device)
-        if self.f_size:
-            args = self.embeddings[:,1:self.f_size+1]
-            args = torch.tensor(args.tolist(),device=self.device)
-            given_args = torch.tensor(args[mask].tolist(),device=self.device)
-            similars= self._similarity_args(given_docvecs,vecs,args,given_args,
-                                            topk,use=use)
+        if not isinstance(docs,list):
+            doc = torch.tensor([docs],device=self.device)
         else:
-            similars= self._similarity(given_docvecs,vecs,topk,use=use)
-        if use=='torch':
-            similar_docs = (docids[similars.indices.tolist()[0]]).tolist()
-            probs = similars.values.tolist()[0]
-            return similar_docs[1:], probs[1:]
-        if use=='sklearn':
-            similar_docs = docids[similars[1]].tolist()
-#             probs = similars
-            return similar_docs[1:], similars[0][1:]
-        
-    def _similarity(self,doc,embeddings,topk,use):
-#         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        
-        if use=='torch':
-            doc = doc/doc.norm(dim=1,keepdim=True)
-            embeddings = embeddings/embeddings.norm(dim=1,keepdim=True)
-            similarity = (torch.mm(doc,embeddings.transpose(0,1))).to(self.device)
-            return torch.topk(similarity,topk)
-        if use=='sklearn':
-            sim = cosine_similarity(X=doc.detach().cpu().numpy(),
-                                    Y=embeddings.detach().cpu().numpy())
-            index = np.argsort(-sim)[0][:topk]
-            sim = -np.sort(-sim[0])
-            return sim[:topk].tolist(),index.tolist()
-    
-    def _similarity_args(self,doc,embeddings,args,given_args,topk,use):
+            doc = torch.tensor(docs,device=self.device)
+        mask = np.isin(self.docids,docs) 
+        if not mask.any():
+            raise Exception('Not a Document Id')
+            
+        inp_vec = self.vectors[mask]
+        sim1 = self.__similarity(inp_vec,self.vectors)
+        if self.f_size:
+            inp = self.args[mask]
+            inp = torch.split(inp,self.pad,dim=1)
+            sim2 = torch.tensor(np.mean(np.concatenate([_similarity(i).detach().cpu() 
+                                                        for i in zip(inp,self.args_split2)],
+                                                       axis=0),axis=0),
+                                device=self.device)
+            similarity = (sim1+sim2)/2
+            tops = torch.topk(similarity,k=topk)
+            p= self.docids[tops.indices.detach().cpu()].tolist()[0][1:]
+            q=tops.values.tolist()[0][1:]
+            return p,q
         
         
-        if use=='torch':
-            doc = doc/doc.norm(dim=1,keepdim=True)
-            embeddings = embeddings/embeddings.norm(dim=1,keepdim=True)
-            similarity1 = (torch.mm(doc,embeddings.transpose(0,1))).to(self.device)
-            args = args/args.norm(dim=1,keepdim=True)
-            given_args = given_args/given_args.norm(dim=1,keepdim=True)
-            similarity2 = (torch.mm(given_args,args.transpose(0,1))).to(self.device)
-            total = (similarity1+similarity2)/2
-            return torch.topk(total,topk)
-        if use=='sklearn':
-            sim = cosine_similarity(X=doc.detach().cpu().numpy(),
-                                    Y=embeddings.detach().cpu().numpy())
-            index = np.argsort(-sim)[0][:topk]
-            sim = -np.sort(-sim[0])
-            return sim[:topk].tolist(),index.tolist()
+    def similar_docs_cpu(self,docs,topk=10):
+        topk=topk+1
+        if not isinstance(docs,list):
+            doc = torch.tensor([docs])
+        else:
+            doc = torch.tensor(docs)
+        mask = np.isin(self.docids,docs) 
+        if not mask.any():
+            raise Exception('Not a Document Id')
+            
+        inp_vec = self.vectors[mask]
+
+#         with concurrent.futures.ProcessPoolExecutor() as executor:
+        sim = self.__similarity(inp_vec,self.vectors)
+        if self.f_size:
+            inp = self.args[mask].detach().cpu()
+            inp = torch.split(inp,self.pad,dim=1)
+            with concurrent.futures.ProcessPoolExecutor(3) as executor:
+                sim2 = torch.tensor(np.mean(np.concatenate(list(executor.map(_similarity,
+                                                                             zip(inp,self.args_split))),
+                                                           axis=0),axis=0),
+                                    device=self.device)
+            similarity = (sim+sim2)/2
+            tops = torch.topk(similarity,k=topk)
+            return self.docids[tops.indices.detach().cpu()].tolist()[0][1:],tops.values.tolist()[0][1:]
+        
+        return sim
+        
+                
+    def __similarity(self,inp,total):
+        inp = inp/inp.norm(dim=1, keepdim=True)
+        total = total/total.norm(dim=1, keepdim=True)
+        sim = torch.mm(inp,total.transpose(0,1)).to(self.device)
+        return sim
