@@ -177,22 +177,6 @@ class DataPreparation():
                 word_count+=1
         return text
     
-#     def phraser(self,min_count,workers=-1):
-#         if workers==-1:
-#             workers = os.cpu_count()
-# #         self.bigrams = self._get_bigrams(300)
-# #         global bigrams
-        
-# #         bigrams = _get_bigrams(self.corpus,min_count)
-#         chunks = np.array_split(self.corpus,workers)
-#         with concurrent.futures.ProcessPoolExecutor() as execu:
-#             result= np.concatenate(list(tqdm.tqdm(execu.imap(_add_bigrams,chunks),total=workers,
-#                                              desc='--Phrasing-- using {} cores'.format(workers))),
-#                                     axis=0)
-        
-#         self.corpus = pd.DataFrame({'text':np.array(result)})['text']
-#         del bigrams
-        
     def phraser(self,min_count):
         self.bigrams = self._get_bigrams(min_count)
         result = self._add_bigrams(self.corpus.values)

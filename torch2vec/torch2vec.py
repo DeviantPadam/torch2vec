@@ -6,7 +6,7 @@ Created on Mon Aug 10 19:48:06 2020
 @author: deviantpadam
 """
 
-# from torch2vec.data import Dataset
+from torch2vec.data import Dataset
 import numpy as np
 import torch
 import torch.nn as nn
