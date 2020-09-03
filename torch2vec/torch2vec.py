@@ -216,7 +216,7 @@ class LoadModel():
                                                         for i in zip(inp,self.args_split2)],
                                                        axis=0),axis=0),
                                 device=self.device)
-            similarity = (sim1+sim2)/2
+            similarity = (sim1+sim2)/4
             tops = torch.topk(similarity,k=topk)
             p= self.docids[tops.indices.detach().cpu()].tolist()[0][1:]
             q=tops.values.tolist()[0][1:]
@@ -245,7 +245,7 @@ class LoadModel():
                                                                              zip(inp,self.args_split))),
                                                            axis=0),axis=0),
                                     device=self.device)
-            similarity = (sim+sim2)/2
+            similarity = (sim+sim2)/4
             tops = torch.topk(similarity,k=topk)
             return self.docids[tops.indices.detach().cpu()].tolist()[0][1:],tops.values.tolist()[0][1:]
         
