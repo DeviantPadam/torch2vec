@@ -1,4 +1,4 @@
-# torch2vec
+# torch2vec - beta
 A PyTorch implementation of Doc2Vec (distributed memory) with similarity measure.
 
 ## Installation
