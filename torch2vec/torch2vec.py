@@ -212,7 +212,7 @@ class LoadModel():
         if self.f_size:
             inp = self.args[mask]
             inp = torch.split(inp,self.pad,dim=1)
-            sim2 = torch.tensor(np.mean(np.concatenate([_similarity(i).detach().cpu() 
+            sim2 = torch.tensor(np.sum(np.concatenate([_similarity(i).detach().cpu() 
                                                         for i in zip(inp,self.args_split2)],
                                                        axis=0),axis=0),
                                 device=self.device)
@@ -241,7 +241,7 @@ class LoadModel():
             inp = self.args[mask].detach().cpu()
             inp = torch.split(inp,self.pad,dim=1)
             with concurrent.futures.ProcessPoolExecutor(3) as executor:
-                sim2 = torch.tensor(np.mean(np.concatenate(list(executor.map(_similarity,
+                sim2 = torch.tensor(np.sum(np.concatenate(list(executor.map(_similarity,
                                                                              zip(inp,self.args_split))),
                                                            axis=0),axis=0),
                                     device=self.device)
